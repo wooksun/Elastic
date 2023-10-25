@@ -1,0 +1,439 @@
+# 인덱스 템플릿
+# 설정이 동일한 인덱스를 매번 일일이 작성하는 것은 비효율적일 뿐만 아니라
+# 실수를 유발할 수 있기 때문에 인덱스 템플릿은 주로 설정이 동일한 복수의
+# 인덱스를 만들 때 사용한다.
+
+# 모든 인덱스 템플릿을 확인한다.
+GET _index_template
+# 특정 인덱스 템플릿을 확인한다.
+# GET _index_template/인덱스템플릿이름
+GET _index_template/ilm-history
+# 확인할 인덱스 템플릿 이름에 와일드카드 문자(*)를 사용할 수 있다.
+GET _index_template/.ml*
+
+# 인덱스 템플릿 만들기
+# PUT _index_template/인덱스템플릿이름
+# {
+#   mappings과 settings을 사용해서 인덱스 템플릿 설정 정의
+# }
+
+# 인덱스 템플릿의 매핑이 적용되지 않은 인덱스 => 다이나믹 매핑이 적용된다.
+PUT test_index1
+GET _cat/indices
+GET test_index1
+DELETE test_index1
+
+PUT test_index1/_doc/1
+{
+  "name": "kim",
+  "age": 99,
+  "gender": "male"
+}
+GET test_index1/_doc/1
+GET test_index1/_mapping
+
+# index_patterns 파라미터: 새로 만들어지는 인덱스 중에 인덱스 이름이 지정한
+#                         인덱스 패턴과 매칭되는 경우 이 템플릿을 적용한다.
+# 인덱스 템플릿을 만들기 전에 존재하던 인덱스들은 새로 작성된 인덱스 템플릿의
+# index_patterns 파라미터에 지정된 패턴과 이름이 일치하더라도 인덱스 템플릿이
+# 적용되지 않는다.
+# 즉, 인덱스 템플릿이 생성된 시점 이후에 작성되는 인덱스에 인덱스 템플릿이
+# 적용된다.
+
+# priority 파라미터: 인덱스 생성 시 인덱스 이름에 매칭되는 인덱스 템플릿이
+#                   2개 이상일 경우 인덱스 템플릿이 적용되는 우선순위를 정한다.
+#                   (숫자가 높은 템플릿이 먼저 적용된다.)
+
+# template 파라미터: 새로 생성되는 인덱스에 적용되는
+#                     mappings와 settings를 설정한다.
+PUT _index_template/test_template
+{
+  "index_patterns": ["test_*"],
+  "priority": 1, 
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1
+    },
+    "mappings": {
+      "properties": {
+        "name": {"type": "text"},
+        "age": {"type": "short"},
+        "gender": {"type": "keyword"}
+      }
+    }
+  }
+}
+GET _index_template/test_template
+GET _index_template/test_*
+
+# 인덱스 템플릿 삭제하기
+# DELETE _index_template/인덱스템플릿이름
+DELETE _index_template/test_template
+
+# 인덱스 템플릿의 매핑이 적용된 인덱스를 만든다.
+PUT test_index2
+GET test_index2
+DELETE test_index2
+
+PUT test_index2/_doc/1
+{
+  "name": "kim",
+  "age": 99,
+  "gender": "male"
+}
+GET test_index2/_doc/1
+GET test_index2/_mapping
+
+# 인덱스 템플릿의 index_patterns과 일치하지 않으면 인덱스 템플릿이 적용되지
+# 않는다.
+PUT testindex2
+GET testindex2
+DELETE testindex2
+
+PUT testindex2/_doc/1
+{
+  "name": "kim",
+  "age": 99,
+  "gender": "male"
+}
+GET testindex2/_doc/1
+GET testindex2/_mapping
+
+# 인덱스 템플릿이 적용된 인덱스에 인덱스 템플릿 매핑값과 다른 데이터가 입력되면
+# mapper_parsing이 가능하면 에러가 발생되지 않지만 불가능하면 에러가 발생된다.
+PUT test_index2/_doc/2
+{
+  "name": "lee",
+  "age": "99",
+  "gender": "female"
+}
+# age에 입력하는 "99"는 short 타입으로 mapper_parsing이 가능하므로 정상처리된다.
+GET test_index2/_doc/2
+GET test_index2/_mapping
+DELETE test_index2
+
+PUT test_index2/_doc/3
+{
+  "name": "choi",
+  "age": "99 years",
+  "gender": "male"
+}
+# "99 years"는 short 타입으로 mapper_parsing이 불가능하므로 에러가 발생된다.
+
+# priority에 지정한 인덱스 템플릿 적용 우선순위 확인
+PUT _index_template/multi_template1
+{
+  "index_patterns": ["multi_*"],
+  "priority": 1,
+  "template": {
+    "mappings":{
+      "properties": {
+        "age": {"type": "integer"},
+        "name":{"type": "text"}
+      }
+    }
+  }
+}
+DELETE _index_template/multi_template1
+
+PUT _index_template/multi_template2
+{
+  "index_patterns": ["multi_data_*"],
+  "priority": 2,
+  "template": {
+    "mappings":{
+      "properties": {
+        "age": {"type": "short"},
+        "name":{"type": "keyword"}
+      }
+    }
+  }
+}
+DELETE _index_template/multi_template2
+
+GET _index_template/multi_*
+
+# 만들려는 인덱스 이름이 multi_data_index이므로 multi_template1 인덱스 템플릿의
+# 인텍스 패턴 "multi_*"에 해당되고, multi_template2 인덱스 템플릿의 인덱스 패턴
+# "multi_data_*"에도 해당된다.
+PUT multi_data_index
+DELETE multi_data_index
+# multi_template1는 priority가 1이고, multi_template2는 priority가 2로
+# 설정되었기 때문에 priority가 크게 지정된 multi_template2가 적용된다.
+GET multi_data_index/_mapping
+
+# 만들려는 인덱스 이름이 multi_sample_index이므로 multi_template1 인덱스
+# 템플릿의 인텍스 패턴 "multi_*"dp goekdehlrh multi_template2 인텍스 템플릿의
+# 인덱스 패턴 "multi_data_*"에는 해당되지 않기 때문에 priority와 상관없이
+# multi_template1가 적용된다.
+PUT multi_sample_index
+GET multi_sample_index/_mapping
+
+# 다이나믹 템플릿
+# 다이나믹 템플릿은 매핑을 다이내믹하고 지정하는 템플릿 기술로 로그 시스템같은
+# 비정형화된 데이터는 데이터의 구조를 알지 못하기 때문에 필드 타입을 정확히
+# 정의하기 힘들고 필드의 개수를 정할 수 없는 경우도 있다.
+# 다이나믹 템플릿은 매핑을 정확하게 할 수 없거나 대략적인 데이터 구조만 알고
+# 있을 때 사용할 수 있는 방법이다.
+
+# 다이나믹 매핑을 적용한 인덱스 생성
+# 인덱스를 만들 때 dynamic_templates를 추가하면 다이나믹 템플릿을 추가할 수 있다
+# my_string_fields는 사용자가 임의로 정한 다이나믹 템플릿의 이름이다.
+# match_mapping_type 파라미터: 다이나믹 템플릿을 적용할 데이터 유형을 지정해서
+#                             다이나믹 매핑의 조건 역할을 한다.
+PUT dynamic_index1
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+       "my_string_fields": {
+          "match_mapping_type": "string",
+          "mapping": {"type": "keyword"}
+        }
+      }
+    ]
+  }
+}
+GET dynamic_index1/_mapping
+DELETE dynamic_index1
+
+# 문자열과 숫자 데이터를 넣어서 다이나믹 템플릿 매핑 결과를 확인한다.
+PUT dynamic_index1/_doc/1
+{
+  "name": "kim",
+  "age": 20
+}
+GET dynamic_index1/_doc/1
+
+PUT dynamic_index1/_doc/2
+{
+  "name": "lee",
+  "age": "30",
+  "gender": "male"
+}
+GET dynamic_index1/_doc/2
+# ==================================
+
+# match 파라미터
+# 필드 이름이 패턴과 일치할 경우 매핑 타입으로 변경한다.
+# unmatch 파라미터
+# match 패턴과 일치하는 경우에 제외할 패턴을 설정한다.
+PUT dynamic_index2
+{
+  "mappings": {
+    "dynamic_templates": [
+      {
+        "my_long_fields": {
+          "match": "long_*",
+          "unmatch": "*_text",
+          "mapping": {"type": "integer"}
+        }
+      }
+    ]
+  }
+}
+DELETE dynamic_index2
+GET dynamic_index2/_mapping
+
+# 필드 이름에 따른 다이나믹 템플릿 매핑 결과를 확인한다.
+# long_num 필드는 match에 적어준 패턴에 매칭되므로 integer 타입으로 매칭된다.
+PUT dynamic_index2/_doc/1
+{
+  "long_num": "5"
+}
+GET dynamic_index2/_doc/1
+
+# long_text 필드는 match에 적어준 패턴에 매칭되지만 unmatch에 적어준 패턴에
+# 매칭되기 때문에 integer 타입으로 매칭되지 않고 멀티 필드로 다이나믹 매칭된다.
+PUT dynamic_index2/_doc/2
+{
+  "long_num": "50",
+  "long_text": "100"
+}
+GET dynamic_index2/_doc/2 
+
+# 분석기
+# 엘라스틱서치는 전문 검색을 지원하기 위해 역인덱싱 기술을 사용한다.
+# 문자열을 토큰화(단어 단위로 나눈다.)하고 인덱싱하는데 이를 역인덱싱이라고 한다
+# 책의 앞부분의 목차와 달리 책 뒷부분에는 단어가 책의 몇 페이지에 나와있는지
+# 알려주는 색인(인덱스, 찾아보기)을 역인덱싱이라 보면 된다.
+# 분석기는 역인덱싱을 지원하기 위해서 캐릭터 필터, 토크나이저, 토큰 필터로
+# 구성된 분석기 모듈을 가지고 있고 토크나이저는 반드시 포함해야 한다.
+# 분석기는 토크나이저를 이용해 필터링된 문자열을 자르게 되는데, 이때 잘린 단위를
+# 토큰이라 하고 이러한 토큰들은 복수의 토큰 필터를 거치며 정제된 후 최종적으로
+# 역인덱스에 저장되는 상태의 토큰을 용어(term)라고 한다.
+
+# 캐릭터 필터 
+# 입력받은 문자열을 변경하거나 불필요한 문자들을 제거한다.
+
+# 토크나이저
+# 문자열을 토큰으로 분리한다. 분리할 때 토큰의 순서나 시작, 끝 위치도 기록한다. 
+
+# 토큰 필터
+# 분리된 토큰 필터 작업을 한다. 대소문자 구분, 형태소 분석 등의 작업을 한다.
+
+# 분석기 사용법은 analyze 파라미터에 사용할 분석기를 입력하고 text 파라미터에
+# 분석할 문자열을 입력하면 된다.
+# stop, standard, simple, whitespace 분석기가 있다.
+
+# whitespace 분석기
+# 공백을 경계로 문장을 토큰화 하고 화이트 스페이스(\n)는 토큰화하지 않는다.
+POST _analyze
+{
+  "analyzer": "whitespace",
+  "text": "The 10 most loving dog breeds."
+}
+# tokens: [The, 10, most, loving, dog, breeds]
+
+# standard 분석기
+# 특별한 설정이 없을 경우 엘라스틱서치가 기본적으로 사용하는 분석기이다.
+# 영무넙을 기준으로 한 스탠다드 토크나이저와 소문자 변경 필터가 포함되어 있다.
+# 공백을 경계로 문장을 토큰화하고 모든 대문자를 소문자로 변경한다.
+# 화이트 스페이스(\n), 특수문자는 토큰화하지 않는다.
+POST _analyze
+{
+  "analyzer": "standard",
+  "text": "The 10 most loving dog breeds."
+}
+# [the, 10, most, loving, dog, breeds.]
+
+# simple 분석기
+# standard 분석기의 기능을 포함하고 있고, 숫자는 토큰화하지 않는다.
+# 문자만 토큰화 한다. 공백, 숫자, 하이픈, 따옴표 같은 문자는 토큰화 않는다.
+POST _analyze
+{
+  "analyzer": "simple",
+  "text": "The 10 most loving dog breeds."
+}
+# [the, most, loving, dog, breeds]
+
+# stop 분석기
+# simple 분석기의 기능을 포함하고 있고, stop 필터가 포함되어 있어서 "the"와 같은
+# 불용어가 제거되었다.
+# stop 필터는 불용어(데이터 집합에 출현하는 빈도는 매우 높지만 의미가 없는 단어)
+# 처리를 한다.
+POST _analyze
+{
+  "analyzer": "stop",
+  "text": "The 10 most loving dog breeds."
+}
+# [most, loving, dog, breeds]
+
+# --------------------------------------------------------------------------
+
+# 토크나이저
+# 토크나이저는 문자열을 분리해 토큰화하는 역할을 한다.
+# 분석기에 반드시 포함되야 하기 때문에 형태에 맞는 토크나이저 선택이 중요하다.
+
+# standard 토크나이저
+# standard 분석기가 사용하는 토크나이저로 특별한 설정이 없으면 기본 토크나이저로 사용된다.
+POST _analyze
+{
+  "tokenizer": "standard",
+  "text": "email: elastick@1k-company.com"
+}
+# [email, elastic, 1k, Company.com]
+
+# lowercase 토크나이저
+# 토큰화한 결과를 모두 소문자로 변경한다.
+POST _analyze
+{
+  "tokenizer": "lowercase",
+  "text": "email: elastick@1k-company.com"
+}
+# [email, elastic, 1k, company.com]
+
+# uax_url_email 토크나이저
+# url이나 email을 토큰화하는데 강점이 있다.
+POST _analyze
+{
+  "tokenizer": "uax_url_email",
+  "text": "email: elastick@1k-company.com"
+}
+# [email, elastic, 1k, company.com]
+
+# 필터
+# 분석기는 하나의 토크나이저와 다수의 필터로 조합된다.
+# 분석기에서 필터는 옵션으로 하나 이상을 포함할 수 있지만, 없어도 분석기를 돌리는데 문제가 발생되지 않는다.
+# 필터가 없는 분석기는 토크나이저만 이용해서 토큰화 작업을 진행하는데, 엘라스틱 서치에서 제공하는 분석기들은 하나 이상의 필터를 포함하고 있고 필터를 통해 더 세부적인 작업이 가능하다.
+# 필터는 단독으로 사용할 수 없고 반드시 토크나이저가 있어야 한다.
+POST _analyze
+{
+  "tokenizer": "standard",
+  "text": "The 10 most loving dog breeds."
+}
+
+POST _analyze
+{
+  "tokenizer": "standard",
+  "filter": ["lowercase"], 
+  "text": "The 10 most loving dog breeds."
+}
+
+POST _analyze
+{
+  "tokenizer": "standard",
+  "filter": ["uppercase"], 
+  "text": "The 10 most loving dog breeds."
+}
+
+# stemmer 필터는 영어 문법을 분석하는 필터로 한글에는 적용되지 않는다.
+POST _analyze
+{
+  "tokenizer": "standard",
+  "filter": ["stemmer"], 
+  "text": "The 10 most loving dog breeds."
+}
+# [The, 10, most, love, dog, breeds]
+
+# 커스텀 분석기
+# 커스텀 분석기는 엘라스틱서치에서 제공하는 내장 분석기들 중 원하는 기능을
+# 만족하는 분석기가 없을 때 사용자가 직접 토크나이저, 필터 등을 조합해서
+# 사용할 수 있는 분석기다.
+
+# 커스텀 분석기를 적용한 인덱스 만들기
+# settings 파라미터에 analysis 파라미터를 추가하고, analysis 파라미터 내부에
+# filter 파라미터로 사용자 정의 필터와 analyzer 파라미터로 사용자 정의 분석기를
+# 지정해서 만든다.
+# analyzer 파라미터 내부에 분석기 이름(my_analyzer)을 지정하고 type을 custom으로
+# 설정하면 커스텀 분석기라는 것을 의미한다.
+# 분석기에는 반드시 토크나이저(tokenizer)가 들어가야 하고 standard 토크나이저로
+# 지정했다.
+# 필터는 선택적인 사항이고 캐릭터 필터(char_filter)와 토큰 필터(filter)를 지정
+# 할 수 있다. 캐릭터 필터는 사용하지 않을것이므로 []만 입력했고, 토큰 필터는
+# 엘라스틱이 제공하는 lowercase와 사용자 정의 필터인 my_stopwords 2개를 사용하기
+# 위해서 ","로 구분해서 필터를 나열했다.
+# stop 필터는 엘라스틱서치가 제공하는 불용어를 제외한 추가적인 불용어가
+# 필요할 때 filter 파라미터에 필터 이름(my_stopwords)을 지정하고 type 파라미터에
+# stop, stopwords 파라미터에 추가 불용어를 입력해서 만든다.
+PUT customer_analyzer
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "my_stopwords": {
+          "type": "stop",
+          "stopwords": ["lions"]
+        }
+      },
+      "analyzer": {
+        "my_analyzer": {
+          "type": "custom",
+          "char_filter": [],
+          "tokenizer": "standard",
+          "filter": ["my_stopwords", "lowercase"]
+        }
+      }
+    }
+  }
+}
+GET customer_analyzer
+DELETE customer_analyzer
+
+# customer_analyzer 커스텀 분석기 테스트
+GET customer_analyzer/_analyze
+{
+  "analyzer": "my_analyzer",
+  "text": "Cats Lions Dogs"
+}
