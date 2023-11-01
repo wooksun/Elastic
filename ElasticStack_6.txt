@@ -1,0 +1,94 @@
+# pipeline aggregation는 이전 결과를 다음 단계에서 이용하는 파이프라인 개념을
+# 사용하는 집계로 이전 집계로 만들어진 결과를 입력으로 삼아서 다시 집계하는
+# 방식이다.
+# 기존 집계 결과를 이용해 새로운 집계를 생성하는 부모 집계와 기존 집계를 참고해
+# 새로운 집계를 생성하는 형제 집계가 있다.
+# 부모 집계의 결과는 기존 집계 내부에 표시되고 형제 집계의 결과는 기존 집계와
+# 동일한 선상에 표시된다.
+
+# 부모 집계(parent aggregation)
+# GET kibana_sample_data_ecommerce/_search
+# {
+#   "aggs": {
+#     "NAME": {
+#       "AGG_TYPE": {}
+#   },
+#   "aggs": {
+#     "NAME": {
+#       "AGG_TYPE": {}
+#       부모 집계
+#     }
+#   }
+# }
+# 부모 집계는 이전 집계 결과를 입력으로 사용하는 집계이므로 부모 집계 단독으로
+# 사용할 수 없고, 반드시 먼저 다른 집계가 있어야 하며 그 집계 결과를 부모 집계가
+# 사용한다.
+# pipeline 집계는 반드시 buckets_path 파라미터로 사용할 집계를 입력한다.
+GET kibana_sample_data_ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "histogram_aggs": {
+      "histogram": {
+        "field": "products.base_price",
+        "interval": 100
+      },
+      "aggs": {
+        "sum_aggs": {
+          "sum": {
+            "field": "taxful_total_price"
+          } 
+        },
+        "cum_sum": {
+          "cumulative_sum": {
+            "buckets_path": "sum_aggs"
+          }
+        }
+      }
+    }
+  }
+}
+
+# 형제 집계(sibling aggregation)
+# GET kibana_sample_data_ecommerce/_search
+# {
+#   "aggs": {
+#     "NAME": {
+#       "AGG_TYPE": {}
+#   },
+#   "aggs": {
+#     "NAME": {
+#       "AGG_TYPE": {}
+#       부모 집계
+#     },
+#     형제 집계
+#   }
+# }
+
+# sum_total 집계는 terms_aggs 집계의 서브 집계인 sum_aggs 집계를 입력으로 받아
+# 사용을 해야하므로 자식 선택자를 사용해서 terms_aggs > sum_aggs와 같이
+# buckets_path 파라미터에 지정해야 한다.
+GET kibana_sample_data_ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "terms_aggs": {
+      "terms": {
+        "field": "day_of_week",
+        "size": 7
+      },
+      "aggs": {
+        "sum_aggs": {
+          "sum": {
+            "field": "products.base_price"
+          }
+        }
+      }
+    },
+    "sum_total": {
+      "stats_bucket": {
+        "buckets_path": "terms_aggs > sum_aggs"
+      }
+    }
+  }
+}
