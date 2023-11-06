@@ -1,0 +1,155 @@
+코덱(codec)
+입력, 필터, 출력과 달리 독립적으로 동작하지 않고 입력과 출력 과정에서 사용되는 플러그인이다.
+
+============================================================================================================
+samplejson.json 파일의 내용
+{"name":"홍길동","age":"20"}
+{"name":"임꺽정","age":"30"}
+{"name":"장길산","age":"40"}
+{"name":"일지매","age":"50"}
+============================================================================================================
+
+============================================================================================================
+logstash-test10.conf 파일의 내용
+input에 plain, json codec 사용
+============================================================================================================
+input {
+  file {
+    # path => "C:/k_digital/elasticStack/logstash-7.17.14/filter-example.log"
+    path => "C:/k_digital/elasticStack/logstash-7.17.14/config/samplejson.json"
+    start_position => "beginning"
+    sincedb_path => "nul"
+
+    # "#"으로 시작하면 그 줄은 주석으로 인식한다.
+    # 메시지를 단순 문자열로 읽어들인다. filter를 사용해서 원하는 형태를 지정할 수 있다.
+    # codec => "plain" # 기본값, "message"라는 필드를 만들고 읽어들인 내용을 저장한다.
+    # json 형태의 메시지를 읽어들인다.
+    codec => "json" # json 파일의 key와 같읕 이름의 필드를 만들고 읽어들인 내용을 저장한다.
+  }
+}
+
+output {
+  stdout{ }
+}
+============================================================================================================
+
+============================================================================================================
+logstash-test11.conf 파일의 내용
+output에 line, json, rubydebug codec 사용
+============================================================================================================
+input {
+  file {
+    path => "C:/k_digital/elasticStack/logstash-7.17.14/filter-example.log"
+    start_position => "beginning"
+    sincedb_path => "nul"
+
+  }
+}
+
+output {
+  stdout{
+    # codec => "line" # 입력받은 내용을 라인 형식으로 출력한다.
+    # codec => "json" # 입력받은 애용을 json 형식으로 출력한다.
+    codec => "rubydebug" # 기본값, 내용을 json 형식으로 들여쓰기를 지원해서 출력한다.
+  }
+}
+============================================================================================================
+
+다중 파이프라인 
+프로젝트를 진행하다 보면 로그 입수 경로가 다양해진다.
+A라는 서버와 B라는 서버가 두 서버의 로그 형태가 다를 경우 단일 파이프라인을 사용하면 파이프라인이 복잡해지고
+요구사항이 변경될 때마다 점점 더 지저분해지는 문제를 해결하기 위해 다중 파이프라인을 사용한다.
+다중 파이프라인은 하나의 로그스태시에서 여러개의 파이프라인을 독립적으로 실행할 수 있게 한다.
+
+============================================================================================================
+pipelines.yml 파일에 다중 파이프라인 설정
+다중 파이프라인을 실행하려면 config 폴더의 pipelines.yml 파일을 수정해야 한다.
+pipelines.yml 파일을 열고, Example of two pipelines: 부분을 참고해서 다중 파이프라인을 설정한다.
+pipelines.id에는 파이프라인의 고유한 아이디를 설정한다. 
+path.config에 파이프라인을 설정한다. 윈도우 환경이지만 경로에 드라이브 이름("C:")을 쓰지 않는다.
+============================================================================================================
+# Example of two pipelines:
+#
+# - pipeline.id: test
+#   pipeline.workers: 1
+#   pipeline.batch.size: 1
+#   config.string: "input { generator {} } filter { sleep { time => 1 } } output { stdout { codec => dots } }"
+# - pipeline.id: another_test
+#   queue.type: persisted
+#   path.config: "/tmp/logstash/*.config"
+
+- pipeline.id: mypipe1
+path.config: "/k_digital/elasticStack/logstash-7.17.14/config/mypipe1.conf"
+- pipeline.id: mypipe2
+path.config: "/k_digital/elasticStack/logstash-7.17.14/config/mypipe2.conf"
+============================================================================================================
+
+============================================================================================================
+mypipe1.conf 파일의 내용
+화면으로 출력
+============================================================================================================
+input {
+  file {
+    path => "C:/k_digital/elasticStack/elasticsearch-7.17.14/logs/elasticsearch.log"
+    start_position => "beginning"
+    sincedb_path => "nul"
+
+  }
+}
+
+output {
+  stdout{ }
+}
+============================================================================================================
+
+============================================================================================================
+mypipe2.conf 파일의 내용
+elasticsearch로 출력
+============================================================================================================
+input {
+  file {
+    path => "C:/k_digital/elasticStack/elasticsearch-7.17.14/logs/elasticsearch.log"
+    start_position => "beginning"
+    sincedb_path => "nul"
+
+  }
+}
+
+output {
+  elasticsearch{
+    index => "mypipe2"
+  }
+}
+============================================================================================================
+.\bin\logstash.bat와 같이 로그스태시를 실행하면 기본적으로 piplines.yml 파일에 정의된 파이프라인을 실행한다.
+-e, -f 옵션을 사용하면 pipelines.yml 파일에 정의된 파이프라인 대신 사용자가 지정한 파이프라인을 실행한다.
+============================================================================================================
+.\bin\logstash.bat --log.level error
+============================================================================================================
+
+============================================================================================================
+모니터링
+로그스태시 config 폴더의 logstash.yml 파일을 열고 # X-Pack Monitoring 부분을 아래와 같이 수정한다.
+============================================================================================================
+logstash.yml
+============================================================================================================
+# ------------ X-Pack Settings (not applicable for OSS build)--------------
+#
+# X-Pack Monitoring
+# https://www.elastic.co/guide/en/logstash/current/monitoring-logstash.html
+xpack.monitoring.enabled: true                                  <= 이부분
+#xpack.monitoring.elasticsearch.username: logstash_system
+#xpack.monitoring.elasticsearch.password: password
+#xpack.monitoring.elasticsearch.proxy: ["http://proxy:port"]
+xpack.monitoring.elasticsearch.hosts: ["http://localhost:9200"] <= 이부분
+# an alternative to hosts + username/password settings is to use cloud_id/cloud_auth
+#xpack.monitoring.elasticsearch.cloud_id: monitoring_cluster_id:xxxxxxxxxx
+#xpack.monitoring.elasticsearch.cloud_auth: logstash_system:password
+============================================================================================================
+logstash.yml 파일 설정 변경 후 로그스태시를 다시 실행해야 변경된 설정이 적용된다.
+
+키바나에서 모니터링 기능 사용하기
+키바나 왼쪽 상단의 햄버거 버튼 클릭 => ManageMent => Stack Monitoring
+Stack Monitoring를 한 번도 실행하지 않았다면 UI에서 "Or, ~~" 링크를 클릭해서 활성화를 먼저 해야한다.
+
+.\bin\logstash.bat와 같이 로그스태시를 실행했으므로 다중 파이프라인이 실행되었고 Pipelines: 2와 같이 나타난다.
